@@ -49,7 +49,6 @@ class NotificationService {
       final localZone = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(localZone));
     } catch (_) {
-      // Fall back to UTC offset detection if platform lookup fails.
       tz.setLocalLocation(tz.local);
     }
 
@@ -65,7 +64,7 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation
         AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(_reminderChannel);
     await androidPlugin?.createNotificationChannel(_alarmChannel);
@@ -82,7 +81,6 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     if (Platform.isAndroid) {
       final notif = await Permission.notification.request();
-      // Android 12+ requires this for exact alarm scheduling.
       final exactAlarm = await Permission.scheduleExactAlarm.request();
       return notif.isGranted && (exactAlarm.isGranted || exactAlarm.isLimited);
     }
@@ -110,7 +108,7 @@ class NotificationService {
   Future<void> scheduleReminder(Reminder reminder) async {
     if (reminder.dateTime.isBefore(DateTime.now()) &&
         reminder.repeat == RepeatRule.none) {
-      return; // don't schedule reminders in the past
+      return;
     }
     await _plugin.zonedSchedule(
       reminder.notificationId,
@@ -133,6 +131,8 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: _matchComponents(reminder.repeat),
     );
   }
@@ -167,6 +167,8 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: _matchComponents(task.repeat),
     );
   }
@@ -177,10 +179,6 @@ class NotificationService {
 
   // ---------- Alarms ----------
 
-  /// Schedules a full-screen, high-priority alarm notification. If the
-  /// alarm repeats on specific weekdays, one exact alarm is scheduled per
-  /// upcoming weekday (each re-arms itself for +7 days once fired, via
-  /// [matchDateTimeComponents] set to dayOfWeekAndTime).
   Future<void> scheduleAlarm(Alarm alarm) async {
     if (!alarm.isEnabled) {
       await cancelAlarm(alarm);
@@ -222,11 +220,12 @@ class NotificationService {
         next,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
       );
       return;
     }
 
-    // One sub-id per weekday so each can independently re-fire weekly.
     for (final weekday in alarm.repeatDays) {
       final next = _nextWeekdayOccurrence(weekday, alarm.hour, alarm.minute);
       await _plugin.zonedSchedule(
@@ -236,6 +235,8 @@ class NotificationService {
         next,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
     }
@@ -245,7 +246,7 @@ class NotificationService {
     final next =
         tz.TZDateTime.now(tz.local).add(Duration(minutes: alarm.snoozeMinutes));
     await _plugin.zonedSchedule(
-      alarm.notificationId + 900, // offset id so it doesn't clash
+      alarm.notificationId + 900,
       '${alarm.label.isNotEmpty ? alarm.label : 'Alarm'} (snoozed)',
       alarm.timeLabel,
       next,
@@ -261,6 +262,8 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
