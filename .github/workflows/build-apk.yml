@@ -1,0 +1,92 @@
+name: Build TaskFlow APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate the native Android project
+        run: flutter create . --platforms=android --project-name taskflow --org com.taskflow.app
+
+      - name: Apply required Android permissions & receivers
+        run: |
+          python3 - <<'PYEOF'
+          import re
+
+          path = "android/app/src/main/AndroidManifest.xml"
+          with open(path, "r") as f:
+              content = f.read()
+
+          permissions = """
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+              <uses-permission android:name="android.permission.VIBRATE"/>
+              <uses-permission android:name="android.permission.WAKE_LOCK"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+              <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+          """
+
+          receivers = """
+              <receiver android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                  </intent-filter>
+              </receiver>
+              <receiver android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+          """
+
+          content = re.sub(
+              r'(<manifest[^>]*>)',
+              r'\1' + permissions,
+              content,
+              count=1,
+          )
+
+          content = content.replace('</application>', receivers + '</application>')
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print("AndroidManifest.xml patched successfully.")
+          PYEOF
+
+      - name: Ensure minSdkVersion is at least 21
+        run: |
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts || true
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaskFlow-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
