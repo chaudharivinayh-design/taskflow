@@ -1,0 +1,47 @@
+<!--
+  TaskFlow — required AndroidManifest.xml additions
+  ==================================================
+  After running `flutter create .` in the project root (see BUILD_INSTRUCTIONS.md),
+  open android/app/src/main/AndroidManifest.xml and:
+
+  1) Add these <uses-permission> tags as direct children of <manifest>,
+     ABOVE the <application> tag.
+  2) Add the two <receiver> tags shown below as children of <application>,
+     alongside the existing <activity> tag.
+  3) If your minSdkVersion is below 21, raise it to 21+ in
+     android/app/build.gradle (flutter_local_notifications requirement).
+-->
+
+<!-- ============ 1) PERMISSIONS (place inside <manifest>) ============ -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
+<uses-permission android:name="android.permission.WAKE_LOCK"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+<uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
+<!-- ============ 2) RECEIVERS (place inside <application>) ============ -->
+<!-- Re-schedules exact alarms after a device reboot -->
+<receiver android:exported="false"
+    android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+        <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+    </intent-filter>
+</receiver>
+
+<!-- Handles the exact-alarm broadcast that fires the scheduled notification -->
+<receiver android:exported="false"
+    android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+
+<!--
+  Also verify android/app/build.gradle contains (Flutter 3.x default already has this):
+    defaultConfig {
+        ...
+        minSdkVersion 21
+        targetSdkVersion 34
+    }
+-->
